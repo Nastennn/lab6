@@ -1,12 +1,3 @@
-import java.io.*;
-import java.net.InetAddress;
-import java.net.Socket;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.NoSuchElementException;
-import java.util.Scanner;
-
 public class Main {
     public static void main(String[] args) {
 
@@ -18,6 +9,7 @@ public class Main {
 
             //BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(in));
             transfer.readCommand();
+            System.out.println(transfer.receive());
 //                byte[] b = new byte[55];
 //                in.read(b);
 //                ByteBuffer bb = ByteBuffer.allocate(55);
@@ -27,7 +19,6 @@ public class Main {
 //                System.out.println(str);
         }
     }
-
 
 
     private static void log(String str) {

@@ -1,36 +1,36 @@
 import com.google.gson.Gson;
-import com.sun.xml.internal.messaging.saaj.util.ByteOutputStream;
+import com.google.gson.reflect.TypeToken;
 import story.Character;
 
 import java.io.*;
 import java.net.InetAddress;
 import java.net.Socket;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.NoSuchElementException;
-import java.util.Scanner;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 
-public class Transfer {
+class Transfer {
     private static final int PORT = 9876;
     private static final String HOST = "localhost";
-    InputStream sin;
-    OutputStream sout;
-    static Socket socket;
-    DataInputStream in;
-    DataOutputStream out;
-    ObjectOutputStream oos;
-    ObjectInputStream ois;
+    private InputStream sin;
+    private OutputStream sout;
+    private static Socket socket;
+    private DataInputStream in;
+    private DataOutputStream out;
+    private ObjectOutputStream oos;
+    private ObjectInputStream ois;
+    private int BUFFER_SIZE = 128;
+    private int OFFSET = 3;
 
-    void connect(){
+    void connect() {
         try {
             System.out.println("Connecting to Server on port " + PORT + "...");
             socket = new Socket(InetAddress.getByName(HOST), PORT);
-        } catch(IOException e){
+        } catch (IOException e) {
             System.out.println();
         }
     }
 
-    int readCommand(){
+    int readCommand() {
         int executeStatus = 0;
         ArrayList<String> jsonCommands = new ArrayList<>(Arrays.asList("add", "remove"));
         Scanner in = new Scanner(System.in);
@@ -41,10 +41,10 @@ public class Transfer {
             String nextLine;
             nextLine = in.nextLine();
             str.append(nextLine);
-            if (jsonCommands.contains(nextLine.split(" ", 2)[0])){
-                while (in.hasNextLine()){
+            if (jsonCommands.contains(nextLine.split(" ", 2)[0])) {
+                while (in.hasNextLine()) {
                     nextLine = in.nextLine();
-                    if (nextLine.equals("")){
+                    if (nextLine.equals("")) {
                         break;
                     }
                     str.append(nextLine);
@@ -61,11 +61,11 @@ public class Transfer {
                     if (!arg.startsWith("[")) {
                         arg = "[" + arg;
                     }
-                    if (!arg.endsWith("]")){
+                    if (!arg.endsWith("]")) {
                         arg = arg + "]";
                     }
                     sendToServer(cmd, arg, socket);
-                } else if (jsonCommands.contains(cmd)){
+                } else if (jsonCommands.contains(cmd)) {
                     System.err.println("Этой команде нужно передать аругмент");
                 } else {
                     sendToServer(cmd, null, socket);
@@ -79,44 +79,43 @@ public class Transfer {
     }
 
     void sendToServer(String cmd, String arg, Socket socket) {
-
-
         try {
             sout = socket.getOutputStream();
             out = new DataOutputStream(sout);
-            byte[] buffer = new byte[256];
+            byte[] buffer = new byte[BUFFER_SIZE];
             // длина данных в первом байте
             buffer[0] = 1; // isCommand
-            buffer[1] = (byte)cmd.getBytes().length;
+            buffer[1] = (byte) cmd.getBytes().length;
             buffer[2] = 0; //no more fragments
             // команда
             for (int i = 0; i < cmd.getBytes().length; i++) {
-                buffer[i+3] = cmd.getBytes()[i];
+                buffer[i + OFFSET] = cmd.getBytes()[i];
             }
             out.write(buffer);
             out.flush();
             System.out.println("Command was sent to server");
 
-            if(arg != null){
-                Character character = new Gson().fromJson(arg, Character.class);
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                oos = new ObjectOutputStream(baos);
-                oos.writeObject(character);
-                byte[] characterInBytes = baos.toByteArray();
-                for (int i = 0; i < characterInBytes.length; i=i+253){
+            if (arg != null) {
+                // Vector<Character> characterVector = new Gson().fromJson(arg, TypeToken.getParameterized(Vector.class, Character.class).getType());
+//                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+//                oos = new ObjectOutputStream(baos);
+//                oos.write();
+                byte[] characterInBytes = arg.getBytes(StandardCharsets.UTF_8);
+                for (int i = 0; i < characterInBytes.length; i = i + BUFFER_SIZE - OFFSET) {
                     int capacity;
-                    if (characterInBytes.length - i > 253){
-                        capacity = 253;
+                    if (characterInBytes.length - i > BUFFER_SIZE - OFFSET) {
+                        capacity = BUFFER_SIZE - OFFSET;
                         buffer[2] = 1; // more fragments
-                    }
-                    else {
+                    } else {
                         capacity = characterInBytes.length - i;
                         buffer[2] = 0; //no more fragments
                     }
                     buffer[0] = 0; // isCommand
                     buffer[1] = (byte) capacity;
-                    for (int j = 3; j < 255; j++) {
-                        buffer[j] = characterInBytes[j+i];
+                    for (int j = 3; j < BUFFER_SIZE - 1; j++) {
+                        if (i + j - OFFSET < characterInBytes.length) {
+                            buffer[j] = characterInBytes[j + i - OFFSET];
+                        }
                     }
                     out.write(buffer);
                     out.flush();
@@ -127,17 +126,27 @@ public class Transfer {
         }
     }
 
-    void recieveFromServer(Socket socket){
+    String receive() {
+        byte[] bytes = new byte[2048];
+        byte[] newBytes = new byte[0];
         try {
             sin = socket.getInputStream();
             in = new DataInputStream(sin);
+            int bytesRead = 0;
+            do {
+                bytesRead += in.read(bytes);
+            } while (in.available() > 0);
+            newBytes = new byte[bytesRead];
+            System.arraycopy(bytes, 0, newBytes, 0, bytesRead);
         } catch (IOException e) {
             e.printStackTrace();
         }
 
+        return new String(newBytes);
+
     }
 
-    void getObject(){
+    void getObject() {
         try {
             System.out.println(ois.readObject());
         } catch (IOException e) {
