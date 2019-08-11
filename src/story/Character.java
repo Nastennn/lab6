@@ -64,7 +64,7 @@ public class Character
 
     @Override
     public String toString() {
-        return "Имя: " + name + ". Город: " + town + ". Рост: " + height;
+        return "Имя: " + name + ".\nРост: " + height + ".\nКоординаты: (" + x + "; " + y + ").";
     }
 
     @Override
