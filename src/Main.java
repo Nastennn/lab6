@@ -4,6 +4,11 @@ public class Main {
         Transfer transfer = new Transfer();
         transfer.getInfoForConnection();
 
+        Authorization authorization = new Authorization(transfer);
+
+        authorization.authorize();
+        // transfer.setAuthHash(authorization.authHash);
+
         Runtime.getRuntime().addShutdownHook(
                 new Thread(() -> System.out.println("Программа завершилась."))
         );

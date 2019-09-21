@@ -3,6 +3,8 @@ package story;
 import javax.xml.bind.annotation.XmlRootElement;
 import java.io.Serializable;
 import java.lang.Math;
+import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 import java.util.Date;
 import java.util.Objects;
 
@@ -17,7 +19,7 @@ public class Character
     transient private Appearance appearance;
     private double x;
     private double y;
-    private Date dateOfBirth;
+    private ZonedDateTime dateOfBirth;
 
 
     public Character(String name, Town town, int height, double x, double y) {
@@ -27,19 +29,31 @@ public class Character
         this.appearance = new Appearance();
         this.x=x;
         this.y =y;
-        dateOfBirth = new Date();
+        this.dateOfBirth = ZonedDateTime.now();
     }
 
     String getAppearance() {
         return name + " выглядел так: " + this.appearance.getAppearance();
     }
 
-    void setHeight(int height) {
+    public void setHeight(int height) {
         this.height = height;
     }
 
-    int getHeight() {
+    public int getHeight() {
         return height;
+    }
+
+    public double getX(){
+        return x;
+    }
+
+    public double getY() {
+        return y;
+    }
+
+    public ZonedDateTime getDateOfBirth() {
+        return ZonedDateTime.now();
     }
 
     @Override
@@ -64,12 +78,12 @@ public class Character
 
     @Override
     public String toString() {
-        return "Имя: " + name + ".\nРост: " + height + ".\nКоординаты: (" + x + "; " + y + ").";
+        return "Имя: " + name + ".\nРост: " + height + ".\nКоординаты: (" + x + "; " + y + ").\n\n";
     }
 
     @Override
     public int compareTo(Character character) {
-      return this.name.compareTo(character.name);
+        return this.name.compareTo(character.name);
     }
 
 

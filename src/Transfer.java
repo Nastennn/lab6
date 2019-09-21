@@ -13,9 +13,10 @@ class Transfer {
     private static int port;
     private int currentTryNumber = 0;
     private static final int TRY_MAX_TIMES = 3;
-    private static final int BUFFER_SIZE = 128;
-    private static final int OFFSET = 3;
+    private static final int BUFFER_SIZE = 512;
+    private static final int OFFSET = 69;
     private static final int SLEEP_TIME = 5000; // ms
+    private String authHash;
 
     void getInfoForConnection() {
         System.out.println("Введите номер порта:");
@@ -35,6 +36,12 @@ class Transfer {
         }
 
     }
+
+    void setAuthHash(String authHash){
+        this.authHash = authHash;
+    }
+
+
 
     int readCommand() {
         int executeStatus = 0;
@@ -63,11 +70,11 @@ class Transfer {
                 if (words.length > 1) {
                     arg = words[1];
                     arg = arg.trim();
-                    sendToServer(cmd, arg);
+                    sendToServer(cmd, arg, false, authHash);
                 } else if (jsonCommands.contains(cmd)) {
                     System.err.println("Этой команде нужно передать аругмент");
                 } else {
-                    sendToServer(cmd, null);
+                    sendToServer(cmd, null, false, authHash);
                 }
             }
         } catch (NoSuchElementException e) {
@@ -77,44 +84,47 @@ class Transfer {
         return executeStatus;
     }
 
-    private void sendToServer(String cmd, String arg) {
-        boolean isSent = send(cmd, arg, socket);
-
-        if (isSent) {
-            return;
+    String sendToServer(String cmd, String arg, boolean isAuth, String authHash) {
+        String response = send(cmd, arg, socket, isAuth, authHash);
+        if (!response.equals("")) {
+            return response;
         }
-
         while (currentTryNumber < TRY_MAX_TIMES) {
             currentTryNumber++;
             System.out.println("Сервер не отвечает. Попытка переподключения #"
                     + currentTryNumber);
             connect();
-
-            isSent = send(cmd, arg, socket);
-
-            if (isSent) {
-                return;
+            response = send(cmd, arg, socket, isAuth, authHash);
+            if (!response.equals("")) {
+                return response;
             }
-
             try {
                 Thread.sleep(SLEEP_TIME);
             } catch (InterruptedException e) {
                 System.err.println("Thread.sleep() вызвал исключение");
             }
         }
-
         System.err.println("Сервер недоступен");
         System.exit(-1);
+        return "";
     }
 
-    private boolean send(String cmd, String arg, Socket socket) {
+    private String send(String cmd, String arg, Socket socket, boolean isAuth, String authHash) {
         try {
-
             byte[] buffer = new byte[BUFFER_SIZE];
             // длина данных в первом байте
             buffer[0] = 1; // isCommand
-            buffer[1] = (byte) cmd.getBytes().length;
-            buffer[2] = 0; //no more fragments
+            int len = cmd.getBytes().length;
+            buffer[1] = (byte) (len / 128);
+            buffer[2] = (byte) (len - (int) buffer[1] * 128);
+            buffer[3] = 0; //no more fragments
+            buffer[4] = (byte) (isAuth ? 1 : 0); // isAuth
+            //далее идет 64 символа авторизации
+            if(!authHash.equals("")){
+                for (int i = 0; i < 64; i++){
+                    buffer[i + 5] = authHash.getBytes()[i];
+                }
+            }
             // команда
             for (int i = 0; i < cmd.getBytes().length; i++) {
                 buffer[i + OFFSET] = cmd.getBytes()[i];
@@ -123,7 +133,7 @@ class Transfer {
             DataOutputStream out = new DataOutputStream(sout);
             out.write(buffer);
             out.flush();
-            System.out.println("Command was sent to server");
+            // System.out.println("Command was sent to server");
             if (arg != null) {
                 try {
                     Character character = new Gson().fromJson(arg, Character.class);
@@ -135,14 +145,15 @@ class Transfer {
                         int capacity;
                         if (characterInBytes.length - i > BUFFER_SIZE - OFFSET) {
                             capacity = BUFFER_SIZE - OFFSET;
-                            buffer[2] = 1; // more fragments
+                            buffer[3] = 1; // more fragments
                         } else {
                             capacity = characterInBytes.length - i;
-                            buffer[2] = 0; //no more fragments
+                            buffer[3] = 0; //no more fragments
                         }
                         buffer[0] = 0; // isCommand
-                        buffer[1] = (byte) capacity;
-                        for (int j = 3; j < BUFFER_SIZE - 1; j++) {
+                        buffer[1] = (byte) (capacity / 128);
+                        buffer[2] = (byte) (capacity - 128 * buffer[1]);
+                        for (int j = OFFSET; j < BUFFER_SIZE - 1; j++) {
                             if (i + j - OFFSET < characterInBytes.length) {
                                 buffer[j] = characterInBytes[j + i - OFFSET];
                             }
@@ -156,14 +167,20 @@ class Transfer {
                 }
             }
         } catch (IOException e) {
-            return false;
+            return "Ошибка.";
         }
-        System.out.println(receive());
-        return true;
+        String response = receive();
+        System.out.println(response);
+        if (response.equals("Ошибка авторизации пользователя.")){
+            Authorization auth = new Authorization(this);
+            auth.authorize();
+            return "";
+        }
+        return response;
     }
 
     String receive() {
-        byte[] bytes = new byte[2048];
+        byte[] bytes = new byte[1000000];
         byte[] newBytes;
         try {
             InputStream sin = socket.getInputStream();
@@ -186,7 +203,6 @@ class Transfer {
                 currentTryNumber = 0;
                 newBytes = new byte[bytesRead];
                 System.arraycopy(bytes, 0, newBytes, 0, bytesRead);
-
                 return new String(newBytes);
             }
         } catch (IOException e) {
